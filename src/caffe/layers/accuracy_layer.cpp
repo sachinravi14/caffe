@@ -90,10 +90,12 @@ void AccuracyLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       for (int k = 0; k < top_k_; k++) {
         if (bottom_data_vector[k].second == static_cast<int>(bottom_label[i])) {
           ++num_correct;
-          file << item_id << "," << static_cast<int>(bottom_label[i]) << "\n";
           break;
         }
       }
+      
+      // Assume we predicted most likely label
+      file << item_id << "," << bottom_data_vector[0].second << "\n";   
     }
 
     //LOG(INFO) << "Item id: " << item_id;
