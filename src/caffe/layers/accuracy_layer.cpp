@@ -10,10 +10,17 @@
 
 namespace caffe {
 
+const string PATH = "/home/sachinr/exp-data/week2/";
+const string FILE_PREFIX = "ids_with_thres_";
+const string FILE_FORMAT = ".txt";
+const double threshold = 0.125;
+
+template <typename Dtype>
+int AccuracyLayer<Dtype>::item_id = 0;
+
 template <typename Dtype>
 void AccuracyLayer<Dtype>::LayerSetUp(
   const vector<Blob<Dtype>*>& bottom, vector<Blob<Dtype>*>* top) {
-  //top_k_ = this->layer_param_.accuracy_param().top_k();
   top_k_ = 1;
 }
 
@@ -33,17 +40,17 @@ void AccuracyLayer<Dtype>::Reshape(
 template <typename Dtype>
 void AccuracyLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
     vector<Blob<Dtype>*>* top) {
-  Dtype accuracy = 0;
+  Dtype num_correct = 0;
   const Dtype* bottom_data = bottom[0]->cpu_data();
   const Dtype* bottom_label = bottom[1]->cpu_data();
   int num = bottom[0]->num();
   int dim = bottom[0]->count() / bottom[0]->num();
 
-  int actual_num = 0;
-  double threshold = 0.5;
+  int actual_num_classified = 0;
   vector<Dtype> maxval(top_k_+1);
   vector<int> max_id(top_k_+1);
 
+  // Get softmax values
   LayerParameter layer_param;
   SoftmaxLayer<Dtype> layer(layer_param);
   vector<Blob<Dtype>*> vals;
@@ -57,7 +64,7 @@ void AccuracyLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
   // Open file for writing threshold info 
   std::ofstream file;
   std::ostringstream s;
-  s << "/home/sachinr/exp-data/week2/thres_" << threshold << ".txt";
+  s << PATH << FILE_PREFIX << threshold << FILE_FORMAT;
   file.open(s.str().c_str(), std::ios::app);
 
   const Dtype* prob_data = prob[0]->cpu_data();
@@ -67,10 +74,8 @@ void AccuracyLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
     for (int j = 0; j < dim; ++j) {
       entropy += -(prob_data[i * dim + j] * ((log(prob_data[i * dim + j])))/(log(2.0)));
     } 
-    //LOG(INFO) << "Entropy: " << entropy;
-    //LOG(INFO) << "----------------------";
     if (entropy < threshold) {
-      ++actual_num;
+      ++actual_num_classified;
 
       // Top-k accuracy
       std::vector<std::pair<Dtype, int> > bottom_data_vector;
@@ -84,21 +89,25 @@ void AccuracyLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       // check if true label is in top k predictions
       for (int k = 0; k < top_k_; k++) {
         if (bottom_data_vector[k].second == static_cast<int>(bottom_label[i])) {
-          ++accuracy;
+          ++num_correct;
+          file << item_id << "," << static_cast<int>(bottom_label[i]) << "\n";
           break;
         }
       }
     }
+
+    //LOG(INFO) << "Item id: " << item_id;
+    ++item_id;
   }
-  LOG(INFO) << "Num Correct: " << accuracy;
-  LOG(INFO) << "Num Clasified: " << actual_num;
-  if (actual_num > 0) {
-    (*top)[0]->mutable_cpu_data()[0] = accuracy / actual_num;
+  LOG(INFO) << "Num Correct: " << num_correct;
+  LOG(INFO) << "Num Clasified: " << actual_num_classified;
+  if (actual_num_classified > 0) {
+    (*top)[0]->mutable_cpu_data()[0] = num_correct / actual_num_classified;
   }
   else {
     (*top)[0]->mutable_cpu_data()[0] = 1.0;
   }
-  file << actual_num << "\n";
+  
   file.close();
   // Accuracy layer should not be used as a loss function.
 }

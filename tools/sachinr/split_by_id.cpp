@@ -17,9 +17,10 @@ using caffe::Datum;
 using caffe::BlobProto;
 using std::string;
 using std::max;
+using std::vector;
 
 void write(int &adds, MDB_dbi mdb_dbi, MDB_txn* mdb_txn, MDB_env* mdb_env, MDB_val mdb_key, MDB_val mdb_value);
-
+vector<string> readString(string &str);
 /*
 Code for splitting lmdb training set into two sets based on file with training item ids
 */
@@ -62,8 +63,6 @@ int main(int argc, char *argv[]) {
   MDB_dbi mdb_dbi_w2;
   MDB_txn* mdb_txn_w2;
 
-  CHECK_EQ(mkdir(argv[3], 0744), 0)
-        << "mkdir " << argv[3] << "failed";
   CHECK_EQ(mdb_env_create(&mdb_env_w1), MDB_SUCCESS) << "mdb_env_create failed";
   CHECK_EQ(mdb_env_set_mapsize(mdb_env_w1, 1099511627776), MDB_SUCCESS)  // 1TB
           << "mdb_env_set_mapsize failed";
@@ -74,8 +73,6 @@ int main(int argc, char *argv[]) {
   CHECK_EQ(mdb_open(mdb_txn_w1, NULL, 0, &mdb_dbi_w1), MDB_SUCCESS)
           << "mdb_open failed. Does the lmdb already exist? ";
 
-  CHECK_EQ(mkdir(argv[4], 0744), 0)
-        << "mkdir " << argv[4] << "failed";
   CHECK_EQ(mdb_env_create(&mdb_env_w2), MDB_SUCCESS) << "mdb_env_create failed";
   CHECK_EQ(mdb_env_set_mapsize(mdb_env_w2, 1099511627776), MDB_SUCCESS)  // 1TB
           << "mdb_env_set_mapsize failed";
@@ -86,20 +83,42 @@ int main(int argc, char *argv[]) {
   CHECK_EQ(mdb_open(mdb_txn_w2, NULL, 0, &mdb_dbi_w2), MDB_SUCCESS)
           << "mdb_open failed. Does the lmdb already exist? ";
 
+  LOG(INFO) << "Reading ids...";
   std::ifstream file(argv[2]);
   string line;
   int curr = 0;
   int numAdds1 = 0, numAdds2 = 0;
-  while (getline(file, line)) {
-    int num = atoi(line.c_str());
   
-    for (int i = curr; i <= num; i++) { 
+  while (getline(file, line)) {
+    vector<string> str_list = readString(line);
+    int num = atoi(str_list[0].c_str());
+    int label = atoi(str_list[1].c_str());
+    LOG(INFO) << "num: " << num << "; label: " << label;
+     
+    for (int i = curr; i < num; i++) { 
       // Write to second file 
-      write(numAdds2, mdb_dbi_w2, mdb_txn_w2, mdb_env_w2, mdb_key, mdb_value); 
+      write(numAdds2, mdb_dbi_w2, mdb_txn_w2, mdb_env_w2, mdb_key, mdb_value);  
+      mdb_cursor_get(mdb_cursor, &mdb_key, &mdb_value, MDB_NEXT);
+     
+      LOG(INFO) << "wrote " << i << " to second file"; 
+      ++curr;
     }
 
     // Write to first file 
+    Datum datum;
+    datum.ParseFromArray(mdb_value.mv_data, mdb_value.mv_size);
+    datum.set_label(label); 
+  
+    string value;
+    datum.SerializeToString(&value); 
+    mdb_value.mv_size = value.size();
+    mdb_value.mv_data = reinterpret_cast<void*>(&value[0]);
+
     write(numAdds1, mdb_dbi_w1, mdb_txn_w1, mdb_env_w1, mdb_key, mdb_value);
+    mdb_cursor_get(mdb_cursor, &mdb_key, &mdb_value, MDB_NEXT);
+
+    LOG(INFO) << "wrote " << curr << "to first file";
+    ++curr;
   }
 
   do {
@@ -125,4 +144,14 @@ void write(int &adds, MDB_dbi mdb_dbi, MDB_txn* mdb_txn, MDB_env* mdb_env, MDB_v
   }
 
   ++adds;
+}
+
+vector<string> readString(string &str) {
+  vector<string> str_list;
+  char c = ',';
+  int i = 0, j = str.find(c);
+  str_list.push_back(str.substr(i, j));
+  str_list.push_back(str.substr(j+1, str.size() - 1));
+
+  return str_list;
 }
