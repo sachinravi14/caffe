@@ -88,7 +88,8 @@ int main(int argc, char *argv[]) {
   string line;
   int curr = 0;
   int numAdds1 = 0, numAdds2 = 0;
-  
+  int status = -1;
+ 
   while (getline(file, line)) {
     vector<string> str_list = readString(line);
     int num = atoi(str_list[0].c_str());
@@ -115,19 +116,28 @@ int main(int argc, char *argv[]) {
     mdb_value.mv_data = reinterpret_cast<void*>(&value[0]);
 
     write(numAdds1, mdb_dbi_w1, mdb_txn_w1, mdb_env_w1, mdb_key, mdb_value);
-    mdb_cursor_get(mdb_cursor, &mdb_key, &mdb_value, MDB_NEXT);
+    status = mdb_cursor_get(mdb_cursor, &mdb_key, &mdb_value, MDB_NEXT);
 
     LOG(INFO) << "wrote " << curr << "to first file";
     ++curr;
   }
-
-  do {
-    // Write rest to second file
-    write(numAdds2, mdb_dbi_w2, mdb_txn_w2, mdb_env_w2, mdb_key, mdb_value); 
-  }
-  while (mdb_cursor_get(mdb_cursor, &mdb_key, &mdb_value, MDB_NEXT)
+  
+  if (status == MDB_SUCCESS) {
+    do {
+      // Write rest to second file
+      write(numAdds2, mdb_dbi_w2, mdb_txn_w2, mdb_env_w2, mdb_key, mdb_value); 
+    }
+    while (mdb_cursor_get(mdb_cursor, &mdb_key, &mdb_value, MDB_NEXT)
                   == MDB_SUCCESS);
+  }
+  
+  CHECK_EQ(mdb_txn_commit(mdb_txn_w1), MDB_SUCCESS) << "mdb_txn_commit failed"; 
+  mdb_close(mdb_env_w1, mdb_dbi_w1);
+  mdb_env_close(mdb_env_w1);  
  
+  CHECK_EQ(mdb_txn_commit(mdb_txn_w2), MDB_SUCCESS) << "mdb_txn_commit failed"; 
+  mdb_close(mdb_env_w2, mdb_dbi_w2);
+  mdb_env_close(mdb_env_w2);
   return 0;
 } 
 
