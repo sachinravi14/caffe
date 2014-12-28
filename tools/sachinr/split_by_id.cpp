@@ -33,41 +33,14 @@ int main(int argc, char *argv[]) {
     return 1;
   }
   
-  // Lmdb
-  MDB_env* mdb_env;
-  MDB_dbi mdb_dbi;
   MDB_val mdb_key, mdb_value;
-  MDB_txn* mdb_txn;
-  MDB_cursor* mdb_cursor;
-
-  // Open db
-  LOG(INFO) << "Opening lmdb " << argv[2];
-  CHECK_EQ(mdb_env_create(&mdb_env), MDB_SUCCESS) << "mdb_env_create failed";
-  CHECK_EQ(mdb_env_set_mapsize(mdb_env, 1099511627776), MDB_SUCCESS);  // 1TB
-  CHECK_EQ(mdb_env_open(mdb_env, argv[2], MDB_RDONLY, 0664),
-                  MDB_SUCCESS) << "mdb_env_open failed";
-  CHECK_EQ(mdb_txn_begin(mdb_env, NULL, MDB_RDONLY, &mdb_txn), MDB_SUCCESS)
-          << "mdb_txn_begin failed";
-  CHECK_EQ(mdb_open(mdb_txn, NULL, 0, &mdb_dbi), MDB_SUCCESS)
-          << "mdb_open failed";
-  CHECK_EQ(mdb_cursor_open(mdb_txn, mdb_dbi, &mdb_cursor), MDB_SUCCESS)
-          << "mdb_cursor_open failed";
-  CHECK_EQ(mdb_cursor_get(mdb_cursor, &mdb_key, &mdb_value, MDB_FIRST),
-                  MDB_SUCCESS);  
-  
+   
+  // Write entire file_to_supplement
   MDB_env* mdb_env_w0;
   MDB_dbi mdb_dbi_w0;
   MDB_txn* mdb_txn_w0;
   MDB_cursor* mdb_cursor_w0;
  
-  MDB_env* mdb_env_w1;
-  MDB_dbi mdb_dbi_w1;
-  MDB_txn* mdb_txn_w1;
-
-  MDB_env* mdb_env_w2;
-  MDB_dbi mdb_dbi_w2;
-  MDB_txn* mdb_txn_w2;
-
   CHECK_EQ(mdb_env_create(&mdb_env_w0), MDB_SUCCESS) << "mdb_env_create failed";
   CHECK_EQ(mdb_env_set_mapsize(mdb_env_w0, 1099511627776), MDB_SUCCESS)  // 1TB
           << "mdb_env_set_mapsize failed";
@@ -81,7 +54,12 @@ int main(int argc, char *argv[]) {
           << "mdb_cursor_open failed";
   CHECK_EQ(mdb_cursor_get(mdb_cursor_w0, &mdb_key, &mdb_value, MDB_FIRST),
                   MDB_SUCCESS);
-  
+ 
+  // file1
+  MDB_env* mdb_env_w1;
+  MDB_dbi mdb_dbi_w1;
+  MDB_txn* mdb_txn_w1;
+
   CHECK_EQ(mdb_env_create(&mdb_env_w1), MDB_SUCCESS) << "mdb_env_create failed";
   CHECK_EQ(mdb_env_set_mapsize(mdb_env_w1, 1099511627776), MDB_SUCCESS)  // 1TB
           << "mdb_env_set_mapsize failed";
@@ -92,6 +70,40 @@ int main(int argc, char *argv[]) {
   CHECK_EQ(mdb_open(mdb_txn_w1, NULL, 0, &mdb_dbi_w1), MDB_SUCCESS)
           << "mdb_open failed. Does the lmdb already exist? ";
 
+
+  LOG(INFO) << "Writing all of file_to_supplement: " << argv[1]; 
+  int numAdds1 = 0, numAdds2 = 0;
+  do {
+    // Write to file1
+    write(numAdds1, mdb_dbi_w1, mdb_txn_w1, mdb_env_w1, mdb_key, mdb_value);  
+  } while(mdb_cursor_get(mdb_cursor_w0, &mdb_key, &mdb_value, MDB_NEXT)
+                  == MDB_SUCCESS);
+
+
+  // Open file_to_split
+  MDB_env* mdb_env;
+  MDB_dbi mdb_dbi; 
+  MDB_txn* mdb_txn;
+  MDB_cursor* mdb_cursor;
+
+  CHECK_EQ(mdb_env_create(&mdb_env), MDB_SUCCESS) << "mdb_env_create failed";
+  CHECK_EQ(mdb_env_set_mapsize(mdb_env, 1099511627776), MDB_SUCCESS);  // 1TB
+  CHECK_EQ(mdb_env_open(mdb_env, argv[2], MDB_RDONLY, 0664),
+                  MDB_SUCCESS) << "mdb_env_open failed";
+  CHECK_EQ(mdb_txn_begin(mdb_env, NULL, MDB_RDONLY, &mdb_txn), MDB_SUCCESS)
+          << "mdb_txn_begin failed";
+  CHECK_EQ(mdb_open(mdb_txn, NULL, 0, &mdb_dbi), MDB_SUCCESS)
+          << "mdb_open failed";
+  CHECK_EQ(mdb_cursor_open(mdb_txn, mdb_dbi, &mdb_cursor), MDB_SUCCESS)
+          << "mdb_cursor_open failed";
+  CHECK_EQ(mdb_cursor_get(mdb_cursor, &mdb_key, &mdb_value, MDB_FIRST),
+                  MDB_SUCCESS);  
+ 
+  // file2
+  MDB_env* mdb_env_w2;
+  MDB_dbi mdb_dbi_w2;
+  MDB_txn* mdb_txn_w2; 
+
   CHECK_EQ(mdb_env_create(&mdb_env_w2), MDB_SUCCESS) << "mdb_env_create failed";
   CHECK_EQ(mdb_env_set_mapsize(mdb_env_w2, 1099511627776), MDB_SUCCESS)  // 1TB
           << "mdb_env_set_mapsize failed";
@@ -101,37 +113,31 @@ int main(int argc, char *argv[]) {
           << "mdb_txn_begin failed";
   CHECK_EQ(mdb_open(mdb_txn_w2, NULL, 0, &mdb_dbi_w2), MDB_SUCCESS)
           << "mdb_open failed. Does the lmdb already exist? ";
+ 
 
-  // Write entire first lmdb
-  int numAdds1 = 0, numAdds2 = 0;
-  do {
-    // Writo first file
-    write(numAdds1, mdb_dbi_w1, mdb_txn_w1, mdb_env_w1, mdb_key, mdb_value);  
-  } while(mdb_cursor_get(mdb_cursor_w0, &mdb_key, &mdb_value, MDB_NEXT)
-                  == MDB_SUCCESS);
-
-  LOG(INFO) << "Reading ids...";
+  LOG(INFO) << "Reading ids from: " << argv[3];
   std::ifstream file(argv[3]);
   string line;
   int curr = 0;
   int status = -1;
- 
+
+  // Split file_to_split according to ids_file 
   while (getline(file, line)) {
     vector<string> str_list = readString(line);
     int num = atoi(str_list[0].c_str());
     int label = atoi(str_list[1].c_str());
-    LOG(INFO) << "num: " << num << "; label: " << label;
+    LOG(INFO) << "id: " << num << "; label: " << label;
      
     for (int i = curr; i < num; i++) { 
-      // Write to second file 
+      // Write to file2
       write(numAdds2, mdb_dbi_w2, mdb_txn_w2, mdb_env_w2, mdb_key, mdb_value);  
       mdb_cursor_get(mdb_cursor, &mdb_key, &mdb_value, MDB_NEXT);
      
-      LOG(INFO) << "wrote " << i << " to second file"; 
+      LOG(INFO) << "wrote " << i << " to file2: " << argv[5]; 
       ++curr;
     }
 
-    // Write to first file 
+    // Write to file1 
     Datum datum;
     datum.ParseFromArray(mdb_value.mv_data, mdb_value.mv_size);
     datum.set_label(label); 
@@ -144,13 +150,13 @@ int main(int argc, char *argv[]) {
     write(numAdds1, mdb_dbi_w1, mdb_txn_w1, mdb_env_w1, mdb_key, mdb_value);
     status = mdb_cursor_get(mdb_cursor, &mdb_key, &mdb_value, MDB_NEXT);
 
-    LOG(INFO) << "wrote " << curr << "to first file";
+    LOG(INFO) << "wrote " << curr << "to file1: " << argv[4];
     ++curr;
   }
   
   if (status == MDB_SUCCESS) {
     do {
-      // Write rest to second file
+      // Write rest of file_to_split to file2
       write(numAdds2, mdb_dbi_w2, mdb_txn_w2, mdb_env_w2, mdb_key, mdb_value); 
     }
     while (mdb_cursor_get(mdb_cursor, &mdb_key, &mdb_value, MDB_NEXT)
@@ -164,6 +170,8 @@ int main(int argc, char *argv[]) {
   CHECK_EQ(mdb_txn_commit(mdb_txn_w2), MDB_SUCCESS) << "mdb_txn_commit failed"; 
   mdb_close(mdb_env_w2, mdb_dbi_w2);
   mdb_env_close(mdb_env_w2);
+  
+  LOG(INFO) << "Done.";
   return 0;
 } 
 
