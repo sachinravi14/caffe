@@ -70,6 +70,8 @@ int main(int argc, char *argv[]) {
     files = listFile(neg_images_dir);
     actual_len = files.size() + 5;
   }
+
+  std::vector<std::pair<std::string, std::string> > data;
   for (int i = 5; i < actual_len; i++) {
     // Read file and write images and corresponding labels to db 
     string filename;
@@ -89,35 +91,39 @@ int main(int argc, char *argv[]) {
     while (std::getline(file, str)) {
       boost::split(parts, str, boost::is_any_of(" "));
      
-      Datum datum;
-      parts[0].replace(0, NFS_PATH.size(), images_dir); 
-      ReadImageToDatum(parts[0].c_str(), atoi(parts[1].c_str()), 256, 256, true, &datum);
+      parts[0].replace(0, NFS_PATH.size(), images_dir);
+      data.push_back(std::make_pair(parts[0], parts[1])); 
       
-      //LOG(INFO) << "Image: " << parts[0].c_str();
-      //LOG(INFO) << "Label: " << atoi(parts[1].c_str());
-      string value;
-      datum.SerializeToString(&value);
-      string keystr(parts[0]);
-      mdb_data.mv_size = value.size();
-      mdb_data.mv_data = reinterpret_cast<void*>(&value[0]);
-      mdb_key.mv_size = keystr.size();
-      mdb_key.mv_data = reinterpret_cast<void*>(&keystr[0]);
-      CHECK_EQ(mdb_put(mdb_txn, mdb_dbi, &mdb_key, &mdb_data, 0), MDB_SUCCESS)
-        << "mdb_put failed";
-
-      if (++count % 1000 == 0) {
-        CHECK_EQ(mdb_txn_commit(mdb_txn), MDB_SUCCESS)
-          << "mdb_txn_commit failed";
-        CHECK_EQ(mdb_txn_begin(mdb_env, NULL, 0, &mdb_txn), MDB_SUCCESS)
-          << "mdb_txn_begin failed";
-      }
-
       ++items;
       if (items > max_len) {
         break;
       } 
     }
-  }   
+  }  
+
+  std::random_shuffle(data.begin(), data.end());
+  for (int i = 0; i < data.size(); ++i) {
+    Datum datum;
+    ReadImageToDatum(data[i].first.c_str(), atoi(data[i].second.c_str()), 256, 256, true, &datum);
+      
+    string value;
+    datum.SerializeToString(&value);
+    string keystr(data[i].first);
+    mdb_data.mv_size = value.size();
+    mdb_data.mv_data = reinterpret_cast<void*>(&value[0]);
+    mdb_key.mv_size = keystr.size();
+    mdb_key.mv_data = reinterpret_cast<void*>(&keystr[0]);
+    CHECK_EQ(mdb_put(mdb_txn, mdb_dbi, &mdb_key, &mdb_data, 0), MDB_SUCCESS)
+      << "mdb_put failed";
+
+    if (++count % 1000 == 0) {
+      CHECK_EQ(mdb_txn_commit(mdb_txn), MDB_SUCCESS)
+        << "mdb_txn_commit failed";
+      CHECK_EQ(mdb_txn_begin(mdb_env, NULL, 0, &mdb_txn), MDB_SUCCESS)
+        << "mdb_txn_begin failed";
+    }
+       
+  } 
 
   if (++count % 1000 != 0) {
     CHECK_EQ(mdb_txn_commit(mdb_txn), MDB_SUCCESS) << "mdb_txn_commit failed";
