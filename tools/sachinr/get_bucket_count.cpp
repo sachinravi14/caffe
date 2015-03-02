@@ -17,10 +17,12 @@ using caffe::BlobProto;
 using std::string;
 using std::max;
 
-/*
-Prints out item number & label for training set
-*/
+int MIN_LABEL = -300;
+int MAX_LABEL = 300;
 
+/*
+Prints out label & corresponding frequency for training set
+*/
 int main(int argc, char *argv[]) {
   ::google::InitGoogleLogging(argv[0]);
  
@@ -64,7 +66,10 @@ int main(int argc, char *argv[]) {
   do {
     Datum datum;
     datum.ParseFromArray(mdb_value.mv_data, mdb_value.mv_size);
-  
+
+    string key((char *)mdb_key.mv_data); 
+    LOG(INFO) << "key: " << key;
+ 
     int label_int = datum.label();
     string label = boost::lexical_cast<string>(label_int);
     //datum.label().SerializeToString(&label);
@@ -83,8 +88,11 @@ int main(int argc, char *argv[]) {
   } while (mdb_cursor_get(mdb_cursor, &mdb_key, &mdb_value, MDB_NEXT) == MDB_SUCCESS);
 
 
-  for (freq_map::iterator it = map.begin(); it != map.end(); ++it) { 
-    LOG(INFO) << it->first << ", " << it->second/total; 
+  for (int i = MIN_LABEL; i < MAX_LABEL; ++i) {
+    string label = boost::lexical_cast<string>(i);
+    if (map.count(label) != 0) {
+      LOG(INFO) << label << ": " << map.at(label)/total;
+    }
   }
 
   return 0;

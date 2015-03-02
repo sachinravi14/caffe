@@ -5,15 +5,20 @@
 #include <sys/stat.h>
 #include <dirent.h>
 
+#include <iomanip>
 #include <algorithm>
-#include <string>
 #include <fstream>
 #include <boost/algorithm/string.hpp>
+#include <string>
+#include <utility>
+#include <vector>
 
 #include "caffe/proto/caffe.pb.h"
 #include "caffe/util/io.hpp"
 #include "caffe/size.hpp"
+#include "caffe/util/rng.hpp"
 
+using namespace caffe;
 using caffe::Datum;
 using caffe::BlobProto;
 using std::string;
@@ -27,11 +32,13 @@ string NFS_PATH = "/n/fs/lsun/imageTurk/";
 string NEG_PREFIX = "neg_category_";
 
 int MAX_CLASSES = 205;
+int MAX_INT_PREFIX = 8;
 
 vector<string> listFile(string path);
 /*
 Given specific negative class files, generate lmdb with negative instances
 generate_negatives path_to_db_to_write images_dir neg_images_dir max_len <list of class files> 
+If no argument for class files, all class files are processed
 */
 int main(int argc, char *argv[]) {
   ::google::InitGoogleLogging(argv[0]);
@@ -54,7 +61,6 @@ int main(int argc, char *argv[]) {
   CHECK_EQ(mdb_open(mdb_txn, NULL, 0, &mdb_dbi), MDB_SUCCESS)
     << "mdb_open failed. Does the lmdb already exist?";
 
-  int count = 0; 
   string images_dir = argv[2];
   string neg_images_dir = argv[3];
   int max_len = atoi(argv[4]);
@@ -90,22 +96,29 @@ int main(int argc, char *argv[]) {
     int items = 0;
     while (std::getline(file, str)) {
       boost::split(parts, str, boost::is_any_of(" "));
-     
+    
       parts[0].replace(0, NFS_PATH.size(), images_dir);
       data.push_back(std::make_pair(parts[0], parts[1])); 
       
       ++items;
-      if (items > max_len) {
+      if (items >= max_len) {
         break;
       } 
     }
   }  
 
-  std::random_shuffle(data.begin(), data.end());
+  shuffle(data.begin(), data.end()); 
+  int count = 0; 
   for (int i = 0; i < data.size(); ++i) {
     Datum datum;
     ReadImageToDatum(data[i].first.c_str(), atoi(data[i].second.c_str()), 256, 256, true, &datum);
-      
+   
+    // Need to generate sorted prefix so that can add random filenames as sorted keys  
+    stringstream ss;
+    ss << std::setw(10) << std::setfill('0') << i;
+    string id_prefix = ss.str(); 
+    data[i].first = id_prefix + "_" + data[i].first; 
+ 
     string value;
     datum.SerializeToString(&value);
     string keystr(data[i].first);
