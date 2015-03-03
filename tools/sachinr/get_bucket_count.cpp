@@ -66,9 +66,6 @@ int main(int argc, char *argv[]) {
   do {
     Datum datum;
     datum.ParseFromArray(mdb_value.mv_data, mdb_value.mv_size);
-
-    string key((char *)mdb_key.mv_data); 
-    LOG(INFO) << "key: " << key;
  
     int label_int = datum.label();
     string label = boost::lexical_cast<string>(label_int);
