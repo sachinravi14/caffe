@@ -36,45 +36,16 @@ void SoftmaxWithLossLayer<Dtype>::Forward_cpu(
   // The forward pass computes the softmax prob values.
   softmax_layer_->Forward(softmax_bottom_vec_, &softmax_top_vec_);
   const Dtype* prob_data = prob_.cpu_data();
-  Dtype* prob_change = prob_.mutable_cpu_data();
   const Dtype* label = bottom[1]->cpu_data();
-
   int num = prob_.num();
   int dim = prob_.count() / num;
   int spatial_dim = prob_.height() * prob_.width();
-
-  // Modify prob
-  for (int i = 0; i<num; i++)
-  {
-    for (int j = 0; j<dim; j++)
-    {
-      Dtype value1 = prob_data[ i * dim + 2 * j ];
-      Dtype value2 = prob_data[ i * dim + 2 * j + 1];
-      prob_change[ i * dim + 2 * j ] = value1/(value1+value2+0.00000001);
-      prob_change[ i * dim + 2 * j + 1 ] = value2/(value1+value2+0.00000001); 
-    }
-  }
-
   Dtype loss = 0;
   for (int i = 0; i < num; ++i) {
     for (int j = 0; j < spatial_dim; j++) {
-      int ori = static_cast<int>(label[i * spatial_dim + j]);
-      bool isneg = ori < -0.5;
-      if (isneg)
-      {
-        ori = -ori - 1;
-        ori = 2 * ori + 1;
-      }
-      else
-      {
-        ori = 2 * ori;
-      }
-      loss -= log(std::max(prob_data[i * dim + ori * spatial_dim + j],
-                   Dtype(FLT_MIN)));
-
-      // loss -= log(std::max(prob_data[i * dim +
-      //     static_cast<int>(label[i * spatial_dim + j]) * spatial_dim + j],
-      //                      Dtype(FLT_MIN)));
+      loss -= log(std::max(prob_data[i * dim +
+          static_cast<int>(label[i * spatial_dim + j]) * spatial_dim + j],
+                           Dtype(FLT_MIN)));
     }
   }
   (*top)[0]->mutable_cpu_data()[0] = loss / num / spatial_dim;
