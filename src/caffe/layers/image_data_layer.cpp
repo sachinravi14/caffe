@@ -125,10 +125,10 @@ void ImageDataLayer<Dtype>::InternalThreadEntry() {
   for (int item_id = 0; item_id < batch_size; ++item_id)
   {
     CHECK_GT(lines_size, lines_id_);
-    while (filesize(lines_[lines_id_].first.c_str()) <= 0) { // Skip images that have size 0
+    /*while (filesize(lines_[lines_id_].first.c_str()) <= 0) { // Skip images that have size 0
       LOG(INFO) << "Skipping: " << lines_[lines_id_].first;
       lines_id_++;
-    }
+    }*/
     current_id[item_id] = lines_id_;
     lines_id_++;
     if (lines_id_ >= lines_size) {
