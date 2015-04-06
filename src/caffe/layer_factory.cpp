@@ -181,6 +181,10 @@ Layer<Dtype>* GetLayer(const LayerParameter& param) {
   switch (type) {
   case LayerParameter_LayerType_ACCURACY:
     return new AccuracyLayer<Dtype>(param);
+  case LayerParameter_LayerType_NONE_THRESHOLD_ACCURACY:
+    return new NoneThresholdAccuracyLayer<Dtype>(param);
+  case LayerParameter_LayerType_NONE_ENTROPY_ACCURACY:
+    return new NoneEntropyAccuracyLayer<Dtype>(param); 
   case LayerParameter_LayerType_ABSVAL:
     return new AbsValLayer<Dtype>(param);
   case LayerParameter_LayerType_ARGMAX:
