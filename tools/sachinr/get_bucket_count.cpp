@@ -22,7 +22,7 @@ int MAX_LABEL = 300;
 
 /*
 Prints out label & corresponding frequency for training set
-./get_bucket_count lmdb max_amt_to_read
+./get_bucket_count lmdb max_amt_to_read(optional)
 */
 int main(int argc, char *argv[]) {
   ::google::InitGoogleLogging(argv[0]);

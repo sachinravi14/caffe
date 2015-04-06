@@ -15,6 +15,11 @@
 
 namespace caffe {
 
+std::ifstream::pos_type filesize(const char* filename) {
+    std::ifstream in(filename, std::ifstream::ate | std::ifstream::binary);
+    return in.tellg();
+}
+
 template <typename Dtype>
 ImageDataLayer<Dtype>::~ImageDataLayer<Dtype>() {
   this->JoinPrefetchThread();
@@ -120,6 +125,10 @@ void ImageDataLayer<Dtype>::InternalThreadEntry() {
   for (int item_id = 0; item_id < batch_size; ++item_id)
   {
     CHECK_GT(lines_size, lines_id_);
+    while (filesize(lines_[lines_id_].first.c_str()) <= 0) { // Skip images that have size 0
+      LOG(INFO) << "Skipping: " << lines_[lines_id_].first;
+      lines_id_++;
+    }
     current_id[item_id] = lines_id_;
     lines_id_++;
     if (lines_id_ >= lines_size) {
@@ -148,7 +157,7 @@ void ImageDataLayer<Dtype>::InternalThreadEntry() {
     {
       int id = current_id[item_id];
       // LOG(ERROR) << item_id << ":" << id << ":" << lines_[id].first;
-      while (!ReadImageToDatum(lines_[id].first,
+      if (!ReadImageToDatum(lines_[id].first,
             lines_[id].second,
             new_height, new_width, &(vdatum[item_id]))) {
         LOG(ERROR) << id << ": "<< lines_[id].first << " (ERRORLOAD)";
