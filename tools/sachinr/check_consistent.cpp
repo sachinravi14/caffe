@@ -15,6 +15,9 @@ using boost::shared_ptr;
 using std::string;
 using std::vector;
 
+/*
+./check_consistent prefix
+*/
 int main(int argc, char *argv[]) {
   ::google::InitGoogleLogging(argv[0]);
 

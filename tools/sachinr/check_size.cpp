@@ -49,12 +49,18 @@ int main(int argc, char *argv[]) {
   CHECK_EQ(mdb_cursor_get(mdb_cursor, &mdb_key, &mdb_value, MDB_FIRST),
                   MDB_SUCCESS);
   
-  // Get size of training set
+  MDB_stat stat;
+  mdb_env_stat( mdb_env, &stat);
+  int numberData = stat.ms_entries;
+  LOG(INFO) << "Set size: " << numberData; 
+  /*// Get size of training set
   LOG(INFO) << "Getting size of training set ";
   int training_set_size = size(mdb_cursor, mdb_key, mdb_value);
   LOG(INFO) << "Set size: " << training_set_size;
   CHECK_EQ(mdb_cursor_get(mdb_cursor, &mdb_key, &mdb_value, MDB_FIRST),
-                  MDB_SUCCESS);     // reset cursor 
+                  MDB_SUCCESS);     // reset cursor*/
+
+  return 0; 
 }
 
 
