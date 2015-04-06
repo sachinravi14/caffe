@@ -8,6 +8,7 @@
 #include "caffe/common.hpp"
 #include "caffe/net.hpp"
 #include "caffe/proto/caffe.pb.h"
+#include "caffe/util/rng.hpp"
 
 #include <iomanip>
 #include <float.h>
@@ -27,22 +28,22 @@ using boost::shared_ptr;
 using std::string;
 using std::vector;
 
-double threshold = 4.9;
+double threshold = 5.0;
 
 const float UPPER_BOUND = 0.70;
-const float LOWER_BOUND = 0.07;
+const float LOWER_BOUND = 0.05;
 const int TOP_K = 5;
 
-const int INTERVAL = 25;
+const int INTERVAL = 10000;
 
 const int NUM_THREADS = 15;
 
 float get_entropy(vector<float> prob);
 
 /*
-./write_useful_negatives lmdb_name <list of file_prefixes>
 From file prefixes, reads in image list file and binary file with feature probability info for
 each image and selects images to write to lmdb based on criteria. 
+./write_useful_negatives lmdb_name <list of file_prefixes>
 */
 int main(int argc, char *argv[]) {
   ::google::InitGoogleLogging(argv[0]);
@@ -56,7 +57,7 @@ int main(int argc, char *argv[]) {
   CHECK_EQ(mkdir(db_path, 0744), 0)
     << "mkdir " << db_path << "failed";
   CHECK_EQ(mdb_env_create(&mdb_env), MDB_SUCCESS) << "mdb_env_create failed";
-  CHECK_EQ(mdb_env_set_mapsize(mdb_env, 1099511627776), MDB_SUCCESS)  // 1TB
+  CHECK_EQ(mdb_env_set_mapsize(mdb_env, 2199023255552), MDB_SUCCESS)  // 1TB
     << "mdb_env_set_mapsize failed";
   CHECK_EQ(mdb_env_open(mdb_env, db_path, 0, 0664), MDB_SUCCESS)
     << "mdb_env_open failed";
@@ -67,7 +68,7 @@ int main(int argc, char *argv[]) {
 
   vector<std::pair<string, string> > image_feature_pairs;
   for (int i = 2; i < argc; ++i) {
-    LOG(INFO) << "Prefix  " << i << ": " << argv[i];
+    LOG(INFO) << "Prefix  " << (i-1) << ": " << argv[i];
 
     string image_list_filename = argv[i]; 
     image_list_filename += ".txt";
@@ -85,6 +86,7 @@ int main(int argc, char *argv[]) {
     string str;
     while (std::getline(image_list_file, str)) {
       ++total;
+
       vector<float> prob;
       vector<std::pair<float, int> > bottom_data_vector;
       for (int i = 0; i < 205; ++i) {
@@ -126,16 +128,21 @@ int main(int argc, char *argv[]) {
         ++added;
         useful_data.push_back(std::make_pair(parts[0], parts[1]));
       //file << str << "\n"; 
+      }
+
+      if (total % INTERVAL == 0) {
+        LOG(INFO) << "Total processed: " << total;
+        LOG(INFO) << "Added item percentage: " << double(added)/total;
       } 
     }
-    if (total % INTERVAL == 0) {
-      LOG(INFO) << "Added item percentage: " << double(added)/total;
-    } 
+    LOG(INFO) << "Finished file " << image_feature_pairs[t].first; 
   }   
 
   LOG(INFO) << "Total amount of data to be stored in lmdb: " << useful_data.size();
+  shuffle(useful_data.begin(), useful_data.end());
 
   int batch_size = 1000;
+  LOG(INFO) << "Number of iterations: " << useful_data.size()/batch_size;
   for (int i = 0; i < useful_data.size()/batch_size; ++i) {
     vector<string> key(batch_size);
     vector<Datum> vDatum(batch_size, Datum());
@@ -154,6 +161,7 @@ int main(int argc, char *argv[]) {
         key[j] = id_prefix + "_" + item.first;
       }
     }
+    LOG(INFO) << "Read Datums";
 
     for (int j = 0; j < batch_size; ++j) { 
       string value;
@@ -170,12 +178,16 @@ int main(int argc, char *argv[]) {
       << "mdb_txn_commit failed";
     CHECK_EQ(mdb_txn_begin(mdb_env, NULL, 0, &mdb_txn), MDB_SUCCESS)
       << "mdb_txn_begin failed";
+    
+    LOG(INFO) << "Finished batch " << (i+1) << "/" << useful_data.size()/batch_size; 
   } 
+
 
   int remainder = useful_data.size() % batch_size;
   int base_index = useful_data.size() - (remainder);
   vector<string> key(remainder);
   vector<Datum> vDatum(remainder, Datum());
+  LOG(INFO) << "Finised all batches; " << remainder << " items remaining"; 
   #pragma omp parallel num_threads(NUM_THREADS) 
   {
     #pragma omp for
@@ -189,8 +201,9 @@ int main(int argc, char *argv[]) {
       string id_prefix = ss.str();
       key[j] = id_prefix + "_" + item.first; 
     }  
-  } 
-  for (int j = 0; j < batch_size; ++j) { 
+  }
+  LOG(INFO) << "Read remainder datums"; 
+  for (int j = 0; j < remainder; ++j) { 
     string value;
     Datum datum = vDatum[j];
     datum.SerializeToString(&value);
@@ -206,7 +219,8 @@ int main(int argc, char *argv[]) {
   CHECK_EQ(mdb_txn_begin(mdb_env, NULL, 0, &mdb_txn), MDB_SUCCESS)
     << "mdb_txn_begin failed";
 
- 
+  LOG(INFO) << "Finished."; 
+
   return 0;
 }
 
