@@ -3,6 +3,8 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <sys/types.h>
+#include <sys/stat.h>
 //#include <omp>
 
 #include "caffe/data_layers.hpp"
@@ -15,9 +17,14 @@
 
 namespace caffe {
 
-std::ifstream::pos_type filesize(const char* filename) {
-    std::ifstream in(filename, std::ifstream::ate | std::ifstream::binary);
-    return in.tellg();
+int getFileSize(const std::string &filepath) {
+    int filesize = -1;
+
+    struct stat fileStats;
+    if(stat(filepath.c_str(), &fileStats) != -1)
+      filesize = fileStats.st_size;
+
+    return filesize;
 }
 
 template <typename Dtype>
@@ -125,10 +132,10 @@ void ImageDataLayer<Dtype>::InternalThreadEntry() {
   for (int item_id = 0; item_id < batch_size; ++item_id)
   {
     CHECK_GT(lines_size, lines_id_);
-    /*while (filesize(lines_[lines_id_].first.c_str()) <= 0) { // Skip images that have size 0
+    while (getFileSize(lines_[lines_id_].first.c_str()) <= 0) { // Skip images that have size 0
       LOG(INFO) << "Skipping: " << lines_[lines_id_].first;
       lines_id_++;
-    }*/
+    }
     current_id[item_id] = lines_id_;
     lines_id_++;
     if (lines_id_ >= lines_size) {

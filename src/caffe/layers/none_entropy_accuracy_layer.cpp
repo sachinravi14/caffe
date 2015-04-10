@@ -50,16 +50,33 @@ void NoneEntropyAccuracyLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bo
   const Dtype* bottom_label = bottom[1]->cpu_data();
   int num = bottom[0]->num();
   int dim = bottom[0]->count() / bottom[0]->num();
+  
+  // Get softmax values
+  LayerParameter layer_param;
+  SoftmaxLayer<Dtype> layer(layer_param);
+  vector<Blob<Dtype>*> vals;
+  vector<Blob<Dtype>*> prob;
+  Blob<Dtype>* blob(new Blob<Dtype>());
+  const Dtype* prob_data;
+
+  vals.push_back(bottom[0]);
+  prob.push_back(blob);
+  layer.SetUp(vals, &prob);
+  layer.Forward(vals, &prob);
+  prob_data = prob[0]->cpu_data(); 
+
+  LOG(INFO) << "Num: " << num;
   for (int i = 0; i < num; ++i) {
     // Top-k accuracy
     std::vector<Dtype> bottom_data_vector;
     for (int j = 0; j < dim; ++j) {
-      bottom_data_vector.push_back(bottom_data[i * dim + j]);
+      bottom_data_vector.push_back(prob_data[i * dim + j]);
     }
     // check if entropy of softmax is greater than cutoff
-    if (get_entropy(bottom_data_vector) >= entropy_cutoff) {
+    float entropy = get_entropy(bottom_data_vector);
+    LOG(INFO) << "Entropy " << i << ": "<< entropy;
+    if (entropy >= entropy_cutoff) {
       ++accuracy;
-      break;
     }
   }
 

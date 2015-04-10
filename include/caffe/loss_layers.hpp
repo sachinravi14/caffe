@@ -147,7 +147,7 @@ class NoneEntropyAccuracyLayer : public Layer<Dtype> {
     }
   }
 
-  const static float entropy_cutoff = 5.0;
+  const static float entropy_cutoff = 4.5;
 };
 
 /**

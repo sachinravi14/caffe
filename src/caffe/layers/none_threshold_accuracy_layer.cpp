@@ -39,12 +39,27 @@ void NoneThresholdAccuracyLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& 
   const Dtype* bottom_label = bottom[1]->cpu_data();
   int num = bottom[0]->num();
   int dim = bottom[0]->count() / bottom[0]->num();
+  
+  // Get softmax values
+  LayerParameter layer_param;
+  SoftmaxLayer<Dtype> layer(layer_param);
+  vector<Blob<Dtype>*> vals;
+  vector<Blob<Dtype>*> prob;
+  Blob<Dtype>* blob(new Blob<Dtype>());
+  const Dtype* prob_data;
+
+  vals.push_back(bottom[0]);
+  prob.push_back(blob);
+  layer.SetUp(vals, &prob);
+  layer.Forward(vals, &prob);
+  prob_data = prob[0]->cpu_data(); 
+ 
   for (int i = 0; i < num; ++i) {
     // Top-k accuracy
     std::vector<std::pair<Dtype, int> > bottom_data_vector;
     for (int j = 0; j < dim; ++j) {
       bottom_data_vector.push_back(
-          std::make_pair(bottom_data[i * dim + j], j));
+          std::make_pair(prob_data[i * dim + j], j));
     }
     std::partial_sort(
         bottom_data_vector.begin(), bottom_data_vector.begin() + 1,
@@ -52,8 +67,8 @@ void NoneThresholdAccuracyLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& 
     
     // check if top class has prob >= threshold
     if (bottom_data_vector[0].first > threshold) {
+      LOG(INFO) << "Above: " << bottom_data_vector[0].first;
       ++wrong;
-      break;
     }
   }
 
